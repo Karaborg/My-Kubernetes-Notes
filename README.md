@@ -28,3 +28,54 @@ And with that command, minikube will start your `Cluster` with `Master Node` and
 After the setup, you can check your minikube status with `minikube status` command. And also check your dashboard with `minikube dashboard` command which will open the dashboard on your default browser automatically.
 
 ## A First Deployment (Imperative Approach)
+To start, we will choose a basic web application. Nothing extraordinary. The only thing to mention is that; it is a Node application, it uses port **80** and it still has a **dockerfile**. Kubernetes still need images. The difference is Kubernetes will take care of deployment for us.
+
+Dockerfile Example:
+```
+FROM node:14-alpine
+
+WORKDIR /app
+
+COPY package.json .
+
+RUN npm install
+
+COPY . .
+
+EXPOSE 8080
+
+CMD [ "node", "app.js" ]
+```
+
+As the first step, we will build our image with the dockerfile:
+```
+docker build -t <imageName> .
+```
+
+After building the image, it is time for the deployment. To do so; we first need to upload our image to DockerHub because as Cluster will act like it is a whole different machine, it cannot pull our local image. So, after uploading the image, we will use the command below:
+```
+kubectl create deployment <deploymentName> --image=<DockerHubRepositoryUser>/<imageName>
+```
+
+> To delete deloyment, use `kubectl delete <deploymentName>` command.
+> To check deployments, use `kubectl get deployments` command.
+> To check pods, use `kubectl get pods` command.
+
+After the first deployment, I would suggest you to check the **deployments** to check if the application is running. If not, check the **pods** to see the issue. If everything is looking good, you can now check the Kubernetes dashboard with `minikube dashboard` command and see details about your cluster's status, deployments and pods.
+
+While you are on the minikube dashboard, you can find an IP address under your pods. But, that IP is for local access itself. So we cannot use that IP to open our web application just yet. That IP will also change time-to-time so it is also not reliable.
+
+To expose the port, we will use the command `kubectl expose ...` as shown below:
+```
+kubectl expose deployment <deploymentName> --type=LoadBalancer --port=<exposedPort>
+```
+
+> The `type` is `ClusterIP` as the **default** which means it is only reachable from inside of the cluster but, there are other types. Such as `NodePort`, which should expose the IP address of the worker nodes, which would make the application accessable from the outside. But even better than that, `LoadBalancer`, which will not only create a unique address but also evenly shares the traffic.
+
+> To check `Services`, use `kubectl get services` command. And if you notice, there will be a pending `EXTERNL-IP`. That will be always pending for our local clusters but if we had a cloud provider, Kubernetes will give an external IP for us to connect too. And since we are not, we need to map a port with a `minikube service <deplomentName>` command, which will open the applcation on our browser.
+
+> If you are working on a cloud provider, you do not have to do anything.
+
+## Restarting Containers
+
+
