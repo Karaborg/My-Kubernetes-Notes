@@ -57,8 +57,12 @@ After building the image, it is time for the deployment. To do so; we first need
 kubectl create deployment <deploymentName> --image=<DockerHubRepositoryUser>/<imageName>
 ```
 
-> To delete deloyment, use `kubectl delete <deploymentName>` command.
+> To delete service, use `kubectl delete service <serviceName>`
+
+> To delete deloyment, use `kubectl delete deployment <deploymentName>` command.
+
 > To check deployments, use `kubectl get deployments` command.
+
 > To check pods, use `kubectl get pods` command.
 
 After the first deployment, I would suggest you to check the **deployments** to check if the application is running. If not, check the **pods** to see the issue. If everything is looking good, you can now check the Kubernetes dashboard with `minikube dashboard` command and see details about your cluster's status, deployments and pods.
@@ -77,5 +81,53 @@ kubectl expose deployment <deploymentName> --type=LoadBalancer --port=<exposedPo
 > If you are working on a cloud provider, you do not have to do anything.
 
 ## Restarting Containers
+Assuming our web application is running with Kubernetes. We built our image, pushed the image to DockerHub and created our deployment. But what if our pods crash? Well, it gets restarted. You can check how many times your pods restarted with the `kubectl get pods` command. And also you can see the restart count from the **Kubernetes Dashboard**
 
+> If your container has an build error, doesn't build right, Kuberneters will not restart if it's doing constantly.
 
+## Scaling
+We can also scale up and down the pods we have. We could scale up to 3 times, so that would open 2 more pods with the running pod and with the help of `Load Balancer`, the traffic would be shared between those 3 pods. And even if one or two of the pods would crash, Load Balancer would direct the traffic to the running pod.
+
+To scale deployments:
+```
+kubectl scale deployment/<deploymentName> --replicas=<desiredNumberOfPods>
+```
+
+After scaling, you can check the deployments and pods.
+
+## Updating Deployments
+To update, you first need to update your image on DockerHub. But there is an important note here. Kubernetes will not update the deployment **if it has the same image tag**, so it is `very important to define tags` now! So, after pushing the newly built image **with a tag**, you can update the deployment with the command below:
+```
+kubectl set image deployment/<deploymentName> <containerName>=<DockerHubRepositoryUser>/<imageName>:<imageTag>
+```
+
+> If you do not know the `container name`, you can find the name under pods in **Kubernetes Dashboard**.
+
+> You may not see the difference imidietly, give it some time to re-deploy the deployment.
+
+## Deployment Rollbacks
+Let's say you had a typo while updating the deployment. You wanted to give a specific tag but, there was a typo. Don't worry, Kubernetes will not shut down the running pods until the new pods are up and running, but the updating process will be stuck in a loop for a while. It will try to pull the non-existing image and fail at the deployment state.
+
+The first thing you want to do is, check the pods with a `kubectl get pods` command. Check the status if it is **ImagePullBackOff**.
+
+And if it is, you can now rollback the `latest` update with the command below:
+```
+kubectl rollout undo deployment/<deploymentName>
+```
+
+If you also want to rollback to an older deployment, first, see the `deployment history` with the command below:
+```
+kubectl rollout history deployment/<deploymentName>
+```
+
+And also see detailed `information about a specific older deployment`, use the command below:
+```
+kubectl rollout history deployment/<deploymentName> --revision=<revisionNumber>
+```
+
+> You can find the `revision number` with the **rollout history list** command.
+
+Then, you can `rollback to an older deployment` with the command below:
+```
+kubectl rollout undo deployment/<deploymentName> --to-revision=<revisionNumber>
+```
