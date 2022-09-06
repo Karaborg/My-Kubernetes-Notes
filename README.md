@@ -54,7 +54,7 @@ docker build -t <imageName> .
 
 After building the image, it is time for the deployment. To do so; we first need to upload our image to DockerHub because as Cluster will act like it is a whole different machine, it cannot pull our local image. So, after uploading the image, we will use the command below:
 ```
-kubectl create deployment <deploymentName> --image=<DockerHubRepositoryUser>/<imageName>
+kubectl create deployment <deploymentName> --image=<DockerHubRepositoryName>/<imageName>
 ```
 
 > To delete service, use `kubectl delete service <serviceName>`
@@ -98,7 +98,7 @@ After scaling, you can check the deployments and pods.
 ## Updating Deployments
 To update, you first need to update your image on DockerHub. But there is an important note here. Kubernetes will not update the deployment **if it has the same image tag**, so it is `very important to define tags` now! So, after pushing the newly built image **with a tag**, you can update the deployment with the command below:
 ```
-kubectl set image deployment/<deploymentName> <containerName>=<DockerHubRepositoryUser>/<imageName>:<imageTag>
+kubectl set image deployment/<deploymentName> <containerName>=<DockerHubRepositoryName>/<imageName>:<imageTag>
 ```
 
 > If you do not know the `container name`, you can find the name under pods in **Kubernetes Dashboard**.
@@ -130,4 +130,82 @@ kubectl rollout history deployment/<deploymentName> --revision=<revisionNumber>
 Then, you can `rollback to an older deployment` with the command below:
 ```
 kubectl rollout undo deployment/<deploymentName> --to-revision=<revisionNumber>
+```
+
+## The Imperative vs The Declarative Approach
+We have now learned how to start our application with Kubernetes (with an imperative approach). But with that approach, we were still using a bunch of individual commands to trigger certain Kubernetes actions. 
+
+Now we will look at the declarative approach, in which we will create a `yaml` file and define our changes and desired states. And Kubernetes will use this file.
+
+> Imperative approach is more like `docker run ...`, and declarative is more like `docker-compose`.
+
+Therefore; we will start with creating our `yaml` file. 
+
+> The name can be anything, just make sure, it is a yaml file.
+
+Example:
+```
+apiVersion: apps/v1                         # must, current verison can be found by simply searching "kubernetes deployment yaml"
+kind: Deployment                            # must, to specify the "kind" we wil be using
+metadata:                                   # name of the deployment, not some actual data
+  name: <deploymentName>
+spec:                                       # specification details 
+  replicas: 1                               # not a must, default is "1"
+  selector:                                 # to make sure the "template" is controlled by the "Deployment". Should mention both app and tier
+    matchLabels:
+        app: <appLabel>
+        tier: <tierLabel>
+  template:                                 # to define "pods"
+    metadata:
+      labels:
+        app: <appLabel>                     # to label it with a "name"
+        tier: <tierLabel>                   # to label it with a "tier". Sust like right above, both works, separately or together
+    spec:                                   # to define a specific pod specifications
+      containers:
+        - name: <containerName>
+          image: <DockerHubRepositoryName>/<imageName>:<imageTag>
+        #- name: ...
+        #  image: ...
+```
+
+> To get more information about the tags, you can use [API Reference for Kubernetes](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#deployment-v1-apps) documentation. Just make sure you are looking for **the right version**.
+
+After creating our yaml file, we can now start our deployment with the command below:
+```
+kubectl apply -f=<yamlFileName/Path>
+```
+
+> More yaml file can be added with another `-f` tag.
+
+Now our application is running. But we cannot reach it yet. We need to expose ports. And since we are doing the declarative approach, we can also create a `yaml` file for the `Service`.
+
+> The name of the yaml file is again, does not matter.
+
+Example:
+```
+apiVersion: v1                              # must, it is the version
+kind: Service                               # must, to specify the "kind" we wil be using
+metadata:                                   # name of the service, not some actual data
+  name: <serviceName>
+spec:                                       # specification details
+  selector:                                 # to select target resorces to controlled by this service
+    app: <appLabel>                         # "app" or/and "tier" does not matter. Both works, separately or together
+  ports:
+    - protocol: 'TCP'                       # default is "TCP"
+      port: <thePortAppUsing>
+      targetPort: <targettedPort>
+    #- protocol: 'TCP'                      # can be add more ports like this
+    #  port: <thePortAppUsing>
+    #  targetPort: <targettedPort>
+  type: LoadBalancer                        # can be LoadBalancer / ClusterIP / NodePort
+```
+
+After that, we will use the `apply` command just like we used for the deployment yaml file:
+```
+kubectl apply -f=<yamlFileName/Path>
+```
+
+And after that, we can see the URL for our application with the command below:
+```
+minikube service <serviceName>
 ```
