@@ -343,3 +343,128 @@ So persistent volumes comes here. These types of volumes are not attached to eit
 > Persistent volume logic: Cluster (indludes volume) > Node > Pod
 
 To get more information about Persistent Volumes, you can check out [Types of Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#types-of-persistent-volumes) document.
+
+Now, we will create a yaml file named `host-pv.yaml`. And we will give the specifics of our persistent volume there as shown below:
+```
+apiVersion: v1                     
+kind: PersistentVolume                          # must, to specify the "kind" we wil be using
+metadata:                                       # to give a name
+  name: host-pv
+spec: 
+  capacity:                                     # to control capacity
+    storage: 1Gi                                # 1 gigabyte
+  volumeMode: Filesystem                        # storage types, can be Filesystem or Block
+  storageClassName: standard                    # to use Kubernetes stardad storage class
+  accessModes:                                  # access type
+    - ReadWriteOnce                             # can be mounted as a read-write volume by a single node
+    #- ReadOnlyMany                             # read-only but it can be claimed by multiple nodes
+    #- ReadWriteMany                            # read-write but it can be claimed by multiple nodes
+  hostPath:                                     # type of volume
+    path: /data                                 # path on host machine
+    type: DirectoryOrCreate                     # to create the path if not exist
+```
+
+> To see Kubernetes storage class, use the command `kubectl get sc`
+
+Once we are done with our persistent volume file, we also need to clarify the volume on our pods. To do so, we will create another yaml file named `host-pvc.yaml` as shown below:
+```
+apiVersion: v1
+kind: PersistentVolumeClaim                     # must, to specify the "kind" we wil be using
+metadata:
+  name: host-pvc                                # to give a name
+spec:
+  volumeName: host-pv                           # to claim the volume
+  accessModes:                                  # access type
+    - ReadWriteOnce
+  resources:                                    # request storage for this volume
+    requests:
+      storage: 1Gi                              # 1 gigabyte
+```
+
+After claiming the volume, we need to establish a connection between our pod and persistent volume. So, we need to go back to our `deployment.yaml` file. And now we need to connect our claim to our pod as shown below:
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: story-deployment
+spec: 
+  replicas: 1
+  selector:
+    matchLabels:
+      app: story
+  template:
+    metadata:
+      labels:
+        app: story
+    spec:
+      containers:
+        - name: story
+          image: karaborg/kub-data-demo:1
+          volumeMounts:
+            - mountPath: /app/story
+              name: story-volume
+      volumes:
+        - name: story-volume
+          persistentVolumeClaim:              # volume type
+            claimName: host-pvc               # to specify which claim we want to use
+```
+
+Moreover, we neet to apply the changes with the commands below:
+```
+kubectl apply -f=host-pv.yaml
+kubectl apply -f=host-pvc.yaml
+kubectl apply -f=deployment.yaml
+```
+
+> To get a list of all persistent volumes, use the command `kubectl get pv`
+
+> To get a list of all claims, use the command `kubectl get pvs`
+
+## Environment Variables
+You can always set environment variables for Kubernetes. To do so, you will need to modify your `deployment.yaml` file as shown below:
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: story-deployment
+spec: 
+  replicas: 1
+  selector:
+    matchLabels:
+      app: story
+  template:
+    metadata:
+      labels:
+        app: story
+    spec:
+      containers:
+        - name: story
+          image: karaborg/kub-data-demo:2
+          env:                                   # 
+            - name: STORY_FOLDER                 # variable name
+              value: 'story'                     # variable value
+          volumeMounts:
+            - mountPath: /app/story
+              name: story-volume
+      volumes:
+        - name: story-volume
+          persistentVolumeClaim:
+            claimName: host-pvc
+```
+
+But, to work more efficiently, we do not think that is the way you want to use environment variables. So, create a file for environments. In this case, we will create a file named `environment.yaml` as shown below:
+```
+apiVersion: v1
+kind: ConfigMap                                 # type
+metadata:
+  name: data-store-env                          # name
+data:
+  folder: 'story'                               # key and it's value
+```
+
+After that we need to apply the yaml file with the command below:
+```
+kubectl apply -f=environment.yaml
+```
+
+> To get a list of config maps, `kubectl get configmap`
