@@ -468,3 +468,42 @@ kubectl apply -f=environment.yaml
 ```
 
 > To get a list of config maps, `kubectl get configmap`
+
+Once it is done, now we need to use the variable in our `deployment.yaml` file as shown below:
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: story-deployment
+spec: 
+  replicas: 1
+  selector:
+    matchLabels:
+      app: story
+  template:
+    metadata:
+      labels:
+        app: story
+    spec:
+      containers:
+        - name: story
+          image: karaborg/kub-data-demo:2
+          env:
+            - name: STORY_FOLDER
+              valueFrom:                          # 
+                configMapKeyRef:                  #
+                  name: data-store-env            # the name we specified in our environment.yaml file
+                  key: folder                     # the key we specified for our variable
+          volumeMounts:
+            - mountPath: /app/story
+              name: story-volume
+      volumes:
+        - name: story-volume
+          persistentVolumeClaim:
+            claimName: host-pvc
+```
+
+And lastly, we apply the `deployment.yaml` file as shown below:
+```
+kubectl apply -f=deployment.yaml
+```
