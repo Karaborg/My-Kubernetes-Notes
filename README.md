@@ -209,3 +209,137 @@ And after that, we can see the URL for our application with the command below:
 ```
 minikube service <serviceName>
 ```
+
+## Updating & Deleting Resources
+To make changes in our deployment, the only thing you need to do is, changing the `yaml` files as you want and then just use the `kubectl app -f=<yamlFileName/Path>` command.
+
+You can also delete the resources based on a file with the command below:
+```
+kubectl delete -f=<yamlFileName/Path>
+```
+
+> The delete command above will not delete the yaml file itself. It will just delete the resources **based on** that file.
+
+> You can also merge 2 yaml files to 1 yaml file. Just makse sure you seperated them with a `---` (3 dashes) as shown below:
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  selector:
+    app: second-app
+  ports:
+    - protocol: 'TCP'
+      port: 80
+      targetPort: 8080
+  type: LoadBalancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: 
+  name: second-app-deployment
+spec: 
+  replicas: 1
+  selector:
+    matchLabels:
+      app: second-app
+      tier: backend
+  template: 
+    metadata:
+      labels:
+        app: second-app
+        tier: backend
+    spec: 
+      containers:
+        - name: second-node
+          image: karaborg/kub-first-app:3
+```
+
+## Managing Data & Volumes
+Just like in Docker, sometimes we will need to store data. However, managing data is not exactly the same as in Docker. In Kubernetes, data might be stored in the container, pods or even in the server. And that differs because you might restart the container or pods or even the server.
+
+The biggest difference in volumes between Docker and Kubernetes is, Docker has anonymous volumes, named volumes and bind mounts. But, Kubernetes has tons of different volumes. You will not be using all of them. They are specified for specific use cases, but we will talk about 2 of them.
+
+To get more information about Volumes, you can check out [Types of Volumes](https://kubernetes.io/docs/concepts/storage/volumes/#volume-types) document.
+
+### emptyDir
+An emptyDir volume is first created when a Pod is assigned to a node and exists as long as that Pod is running on that node. As the name says, the emptyDir volume is initially empty. All containers in the Pod can read and write the same files in the emptyDir volume, though that volume can be mounted at the same or different paths in each container. When a Pod is removed from a node for any reason, the data in the emptyDir is deleted permanently.
+
+> A container crashing does not remove a Pod from a node. The data in an emptyDir volume is safe across container crashes.
+
+emptyDir configuration example (deployment.yaml):
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: story-deployment
+spec: 
+  replicas: 1
+  selector:
+    matchLabels:
+      app: story
+  template:
+    metadata:
+      labels:
+        app: story
+    spec:
+      containers:
+        - name: story
+          image: karaborg/kub-data-demo:1
+          volumeMounts:                           # clerify the volume to container
+            - mountPath: /app/story               # to give the exect path to set as a volume
+              name: story-volume                  # name of the volume
+      volumes:                                    # add volume in the same level as container
+        - name: story-volume                      # give a name for your volume
+          emptyDir: {}                            # give the type of volume
+```
+
+> Since this type of volume closely attached to pods, it will not work as the same when we use multi replicas.
+
+### hostPath 
+This allows us to set a path on the host machine, so on the node, the real machine running this pod, and then the data from that path will be exposed to the different pods. So multiple pods can now share one in the same path on the host machine.
+
+hostPath configuration example (deployment.yaml):
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: story-deployment
+spec: 
+  replicas: 1
+  selector:
+    matchLabels:
+      app: story
+  template:
+    metadata:
+      labels:
+        app: story
+    spec:
+      containers:
+        - name: story
+          image: karaborg/kub-data-demo:1
+          volumeMounts:                           # clerify the volume to container
+            - mountPath: /app/story               # to give the exect path to set as a volume
+              name: story-volume                  # name of the volume
+      volumes:                                    # add volume in the same level as container
+        - name: story-volume                      # give a name for your volume
+          hostPath:                               # give the type of volume
+            path: /data                           # set a path on host machine
+            type: DirectoryOrCreate               # this will create the path if it's not created yet. Can be used 'Directory' if created
+```
+
+> Since this type of volume closely attached to nodes, it will not work as the same when we use multi nodes.
+
+## Persistent Volumes
+As we mentioned in the **emptyDir** and **hostPath** volumes, the volumes we defined are not persistent. emptyDir is attached to pods. That means we will not be able to use the same volume on different pods. And hostPath is attached to nodes. And that means we will not be able to use that volume on different nodes.
+
+So persistent volumes comes here. These types of volumes are not attached to either pods or nodes. So we will not have to lose our data when we restart our pods or nodes. 
+
+> emptyDir volume logic: Cluster > Node > Pod (indludes volume)
+
+> hostPath volume logic: Cluster > Node (indludes volume) > Pod
+
+> Persistent volume logic: Cluster (indludes volume) > Node > Pod
+
+To get more information about Persistent Volumes, you can check out [Types of Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#types-of-persistent-volumes) document.
