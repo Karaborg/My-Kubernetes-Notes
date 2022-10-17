@@ -192,11 +192,11 @@ spec:                                       # specification details
     app: <appLabel>                         # "app" or/and "tier" does not matter. Both works, separately or together
   ports:
     - protocol: 'TCP'                       # default is "TCP"
-      port: <thePortAppUsing>
-      targetPort: <targettedPort>
+      port: <targettedPort>
+      targetPort: <thePortAppUsing>
     #- protocol: 'TCP'                      # can be add more ports like this
-    #  port: <thePortAppUsing>
-    #  targetPort: <targettedPort>
+    #  port: <targettedPort>
+    #  targetPort: <thePortAppUsing>
   type: LoadBalancer                        # can be LoadBalancer / ClusterIP / NodePort
 ```
 
@@ -507,3 +507,150 @@ And lastly, we apply the `deployment.yaml` file as shown below:
 ```
 kubectl apply -f=deployment.yaml
 ```
+
+## Kubernetes Networking
+Let's say we have a multi-container application. One for **User API**, one for **Auth API** and another one for **Task API**. The Client can access **Users API** and **Task APIs** but not **Auth API**. In the meantime, We want **User API** and **Auth API** to talk to each other.
+
+One of the ways of doing that is to put both containers inside the same Pod. And we call the connection as `Pod-Internal`.
+
+> Cluster( Pod(Auth API <--Pod-Internal-- User API) Pod(Task API) )
+
+To do so; we create a `users-deployment.yaml` file as shown below:
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: users-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: users
+  template:
+    metadata:
+      labels:
+        app: users
+    spec:
+      containers:
+        - name: users
+          image: karaborg/kub-demo-users:latest
+```
+
+And also a `users-service.yaml` file:
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: users-service
+spec:
+  selector:
+    app: users
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+```
+
+Now we have a running Users API, we can now build our Auth API too. To do that, we will not create another `yaml` file. Instead, we will add our Auth API container inside of our `users-deployment.yaml` file as shown below:
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: users-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: users
+  template:
+    metadata:
+      labels:
+        app: users
+    spec:
+      containers:
+        - name: users
+          image: karaborg/kub-demo-users:latest
+          env:
+            - name: AUTH_ADDRESS
+              value: localhost
+        - name: auth
+          image: karaborg/kub-demo-auth:latest
+```
+
+With that done, when we apply our `yaml` file, Kubernetes will create both containers inside of just one pod. And since they are in the same pod. They can access each other with `localhost` URL.
+
+But what if we want to connect from **another pod**?
+
+> Cluster( Pod(Users API) --Cluster-Internal--> Pod(Auth API) <--Cluster-Internal-- Pod(Task API) )
+
+Let's start with creating our `auth-deployment.yaml` file similar to **users-deployment.yaml** file as shown below:
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth
+  template:
+    metadata:
+      labels:
+        app: auth
+    spec:
+      containers:
+        - name: auth
+          image: karaborg/kub-demo-auth:latest
+```
+
+Moreover, we will also need a `auth-service.yaml` file:
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+spec:
+  selector:
+    app: auth
+  type: ClusterIP
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+```
+
+> We used `LoadBalancer` type of service so far. But since we don't want our Auth API to accessed by outside, and LoadBalancer allows that, we decide to use `ClusterIP`. Which doesn't allow access from outside.
+
+Since now, we have our separated container for Auth API, we also need to remove our old Auth API container from `users-deployment.yaml` file:
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: users-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: users
+  template:
+    metadata:
+      labels:
+        app: users
+    spec:
+      containers:
+        - name: users
+          image: karaborg/kub-demo-users:latest
+          env:
+            - name: AUTH_ADDRESS
+              value: 10.105.86.144
+```
+
+> When we had our both containers in the same pod, we could use `localhost` to make a connection through URL links. But, since we decided to use `ClusterIP` and separate pods, we need to use the URL Auth API service uses.
+
+> To get a list of services; use the command `kubectl get services`.
+
+With that in mind, Kubernetes also automatically generates a value of service IP's. So we don't have to manually check the `ClusterIP` IP's. To get the automatically generated service IP, we can use `<SERVICE_NAME>_`SERVICE_HOST` as an **environment variable**.
+
+> In the case above, the Auth API service IP which named as `auth-service` can be used as `AUTH_SERVICE_SERVICE_HOST`.
