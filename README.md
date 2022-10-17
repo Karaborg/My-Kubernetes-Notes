@@ -651,6 +651,6 @@ spec:
 
 > To get a list of services; use the command `kubectl get services`.
 
-With that in mind, Kubernetes also automatically generates a value of service IP's. So we don't have to manually check the `ClusterIP` IP's. To get the automatically generated service IP, we can use `<SERVICE_NAME>_`SERVICE_HOST` as an **environment variable**.
+With that in mind, Kubernetes also automatically generates a value of service IP's. So we don't have to manually check the `ClusterIP` IP's. To get the automatically generated service IP, we can use `<SERVICE_NAME>_SERVICE_HOST` as an **environment variable**.
 
 > In the case above, the Auth API service IP which named as `auth-service` can be used as `AUTH_SERVICE_SERVICE_HOST`.
