@@ -76,7 +76,7 @@ kubectl expose deployment <deploymentName> --type=LoadBalancer --port=<exposedPo
 
 > The `type` is `ClusterIP` as the **default** which means it is only reachable from inside of the cluster but, there are other types. Such as `NodePort`, which should expose the IP address of the worker nodes, which would make the application accessable from the outside. But even better than that, `LoadBalancer`, which will not only create a unique address but also evenly shares the traffic.
 
-> To check `Services`, use `kubectl get services` command. And if you notice, there will be a pending `EXTERNL-IP`. That will be always pending for our local clusters but if we had a cloud provider, Kubernetes will give an external IP for us to connect too. And since we are not, we need to map a port with a `minikube service <deplomentName>` command, which will open the applcation on our browser.
+> To check `Services`, use `kubectl get services` command. And if you notice, there will be a pending `EXTERNL-IP`. That will be always pending for our local clusters but if we had a cloud provider, Kubernetes will give an external IP for us to connect too. And since we are not, we need to map a port with a `minikube service <serviceName>` command, which will open the applcation on our browser.
 
 > If you are working on a cloud provider, you do not have to do anything.
 
@@ -654,3 +654,49 @@ spec:
 With that in mind, Kubernetes also automatically generates a value of service IP's. So we don't have to manually check the `ClusterIP` IP's. To get the automatically generated service IP, we can use `<SERVICE_NAME>_SERVICE_HOST` as an **environment variable**.
 
 > In the case above, the Auth API service IP which named as `auth-service` can be used as `AUTH_SERVICE_SERVICE_HOST`.
+
+Moreover, Kubernetes clusters by default, come with a built-in service called `CoreDNS`. It creates **cluster internal domain names**. This means they are not open to the public but they can be accessible inside the cluster.
+
+So with that in mind, we can also use these domain names as our IPs as `"<serviceName>.<nameSpace>"`, as shown below:
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: users-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: users
+  template:
+    metadata:
+      labels:
+        app: users
+    spec:
+      containers:
+        - name: users
+          image: karaborg/kub-demo-users:latest
+          env:
+            - name: AUTH_ADDRESS
+              value: "auth-service.default"
+```
+
+> To list `name spaces`, type: `kubectl get namespaces`.
+
+> Unless we tell Kubernetes otherwise, it will assign our deployments and services to `default` name space. 
+
+## Kubernetes Deployment (Amazon AWS EKS)
+
+AWS ECS (Elastic Container Service):
+- Managed service for **Container** deployments.
+- AWS-specific syntax and philosophy applies.
+- Use AWS-specific configuration and concepts.
+
+AWS EKS (Elastic Kubernetes Service):
+- Managed service for **Kubernetes** deployments.
+- No AWS-specific syntax of philosophy required.
+- Use standard Kubernetes configurations and resources.
+
+> You can also use neigher of them and configure everything your own, or use a tool such as [kops](https://github.com/kubernetes/kops).
+
+> EKS services is actually uses EC2 instances.
