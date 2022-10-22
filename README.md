@@ -65,6 +65,8 @@ kubectl create deployment <deploymentName> --image=<DockerHubRepositoryName>/<im
 
 > To check pods, use `kubectl get pods` command.
 
+> To check resource consumptions: use `kubectl top node` and `kubectl top pod`.
+
 After the first deployment, I would suggest you to check the **deployments** to check if the application is running. If not, check the **pods** to see the issue. If everything is looking good, you can now check the Kubernetes dashboard with `minikube dashboard` command and see details about your cluster's status, deployments and pods.
 
 While you are on the minikube dashboard, you can find an IP address under your pods. But, that IP is for local access itself. So we cannot use that IP to open our web application just yet. That IP will also change time-to-time so it is also not reliable.
@@ -75,6 +77,30 @@ kubectl expose deployment <deploymentName> --type=LoadBalancer --port=<exposedPo
 ```
 
 > The `type` is `ClusterIP` as the **default** which means it is only reachable from inside of the cluster but, there are other types. Such as `NodePort`, which should expose the IP address of the worker nodes, which would make the application accessable from the outside. But even better than that, `LoadBalancer`, which will not only create a unique address but also evenly shares the traffic.
+
+You can also use `Ingress Rules` to clarify which hosts should direct to which pods. To do so;
+```
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: helloworld-rules
+spec: 
+  rules:
+  - host: helloworld-v1.example.com         # to host which user will try to connect
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: helloworld-v1        # the service which client will be directed
+          servicePort: 80
+  - host: helloworld-v2.example.com         # to host which user will try to connect
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: helloworld-v2        # the service which client will be directed
+          servicePort: 80
+```
 
 > To check `Services`, use `kubectl get services` command. And if you notice, there will be a pending `EXTERNL-IP`. That will be always pending for our local clusters but if we had a cloud provider, Kubernetes will give an external IP for us to connect too. And since we are not, we need to map a port with a `minikube service <serviceName>` command, which will open the applcation on our browser.
 
@@ -95,6 +121,49 @@ kubectl scale deployment/<deploymentName> --replicas=<desiredNumberOfPods>
 
 After scaling, you can check the deployments and pods.
 
+## Autoscaling
+As we mentioned in the **Scaling**, We can change the pod numbers. But if we want it to scale up and down automatically, we can use `Autoscaling`.
+
+Let's first set resources to our `deployment.yaml` file:
+```
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: hpa-example
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: hpa-example
+    spec:
+      containers:
+      - name: hpa-example
+        image: gcr.io/google_containers/hpa-example
+        ports:
+        - name: http-port
+          containerPort: 80
+        resources:
+          requests:
+            cpu: 200m                           # 20% of a CPU core of the runnnig node
+```
+
+And then our `HorizontalPodAutoscaler` file:
+```
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-example-autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: extensions/v1bata1
+    kind: Deployment
+    name: hpa-example
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 50
+```
+
 ## Updating Deployments
 To update, you first need to update your image on DockerHub. But there is an important note here. Kubernetes will not update the deployment **if it has the same image tag**, so it is `very important to define tags` now! So, after pushing the newly built image **with a tag**, you can update the deployment with the command below:
 ```
@@ -109,6 +178,8 @@ kubectl set image deployment/<deploymentName> <containerName>=<DockerHubReposito
 Let's say you had a typo while updating the deployment. You wanted to give a specific tag but, there was a typo. Don't worry, Kubernetes will not shut down the running pods until the new pods are up and running, but the updating process will be stuck in a loop for a while. It will try to pull the non-existing image and fail at the deployment state.
 
 The first thing you want to do is, check the pods with a `kubectl get pods` command. Check the status if it is **ImagePullBackOff**.
+
+> You can also check the pod status with: `kubectl describe pod <podName>` command.
 
 And if it is, you can now rollback the `latest` update with the command below:
 ```
@@ -507,6 +578,53 @@ And lastly, we apply the `deployment.yaml` file as shown below:
 ```
 kubectl apply -f=deployment.yaml
 ```
+
+## Pod Presets
+We can also set **shared** variables even before starting our deployments. `Pod Presets` allows us to define **environments variables**, **volume mounts** and **mounts** without even needing a deployment. Once we deploy our app though, if the labels are matched, our presets can be defined automatically.
+
+To create `Pod Presets`:
+```
+apiVersion: setting.k8s.io/v1alpha1
+kind: PodPreset
+metadata:
+  name: <name>
+spec:
+  selector:
+    matchLabels:
+      app: myapp                            # label name we want to match
+  env:
+    - name: MY_SECRET
+      value: "123456"
+  volumeMounts:
+    - mountPath: /share
+      name: share-volume
+  volumes:
+    - name: share-volume
+      emptyDir: {}
+```
+
+Once this is done, we can edit our `deployment.yaml` file:
+```
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: deployment
+spec:
+  replicas: 3
+  template:
+    metada:
+      labels:
+        app: myapp                        # our label name
+    spec:
+      containers:
+      - name: k8s-demo
+        image: wardviaene/k8s-demo
+        ports:
+          - name: nodejs-port
+            containerPort: 3000
+```
+
+> To check your `Pod Presets`, use the command: `kubectl get podpresets`.
 
 ## Kubernetes Networking
 Let's say we have a multi-container application. One for **User API**, one for **Auth API** and another one for **Task API**. The Client can access **Users API** and **Task APIs** but not **Auth API**. In the meantime, We want **User API** and **Auth API** to talk to each other.
