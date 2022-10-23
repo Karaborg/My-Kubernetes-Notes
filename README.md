@@ -1,5 +1,5 @@
 # Welcome
-This is me taking notes on GitHub while learning `Kubernetes`. I will probably be going to need this document when I forget how docker works. If you find something useful, be my guest. I will try to update this whenever I study.
+This is me taking notes on GitHub while learning `Kubernetes`. I will probably be going to need this document when I forget how it works. If you find something useful, be my guest. I will try to update this whenever I study.
 
 ## Intro
 Before we start, we need to clarify a couple of things. To work with Kubernetes, we first need a `Cluster`, which we will run our Kubernetes. This **Cluster** will have a `Master Node`, and one or more `Worker Node/s`. This is where we will deploy our application and run it. To interact with the Kubernetes cluster, we will need `kubectl` tool.
